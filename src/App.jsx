@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 
 // CONFIG - update before deploy
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbx7yX0pX27vCegfCNc9k9qrJOSiWipqjRv6jcP87HWVWMutg51CYGMktXDxtf7-zNVv-Q/exec'; 
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwIBMsARWP5H6CqqqjTb4FzHPPvQjJPymlVbdfj96rAhOVPxcC3LCq0DT9HpMqlF0__bg/exec'; 
 const OAUTH_CLIENT_ID = '718386722941-29avbsbt8dc14ve059667pa9au0lr1i0.apps.googleusercontent.com'; 
 
 // --- Encryption utilities (AES-GCM via Web Crypto)
