@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 
 // CONFIG - update before deploy
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwjgCJOJu8Xac2n38491e1VvurZ2yHP_F7Z8oh6oRXhRs6dTFAmsdpdsyAJzNYhmtNBiA/exec'; // e.g. https://script.google.com/macros/s/AKfyc.../exec
-const OAUTH_CLIENT_ID = '718386722941-29avbsbt8dc14ve059667pa9au0lr1i0.apps.googleusercontent.com'; // Google OAuth client ID (optional for sign-in)
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbx7yX0pX27vCegfCNc9k9qrJOSiWipqjRv6jcP87HWVWMutg51CYGMktXDxtf7-zNVv-Q/exec'; 
+const OAUTH_CLIENT_ID = '718386722941-29avbsbt8dc14ve059667pa9au0lr1i0.apps.googleusercontent.com'; 
 
 // --- Encryption utilities (AES-GCM via Web Crypto)
 async function deriveKey(passphrase, salt) {
@@ -28,9 +28,11 @@ async function decryptString(b64, passphrase) {
   return new TextDecoder().decode(pt);
 }
 
-async function apiFetch(path, body=null) {
+// --- API fetch with query action
+async function apiFetch(action, body=null) {
   if (!BACKEND_URL) throw new Error('Set BACKEND_URL in App config');
-  const url = new URL(BACKEND_URL + path);
+  const url = new URL(BACKEND_URL);
+  url.searchParams.set('action', action);
   const opts = body ? { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) } : { method: 'GET' };
   const res = await fetch(url.toString(), opts);
   if (!res.ok) throw new Error('Network error ' + res.status);
@@ -56,12 +58,23 @@ export default function App() {
   const [encPass,setEncPass] = useState('');
   const [loading,setLoading] = useState(false);
 
-  useEffect(()=>{ loadGoogleScript().then(()=>{ if (!OAUTH_CLIENT_ID) return; window.google?.accounts?.id.initialize({ client_id: OAUTH_CLIENT_ID, callback: tr=>{ try{ const p = JSON.parse(atob(tr.credential.split('.')[1])); setUser({ id: p.sub, email: p.email, name: p.name }); fetchAll(); }catch(e){console.warn(e);} } }); }); },[]);
+  useEffect(()=>{
+    loadGoogleScript().then(()=>{
+      if (!OAUTH_CLIENT_ID) return;
+      window.google?.accounts?.id.initialize({ client_id: OAUTH_CLIENT_ID, callback: tr=>{
+        try{
+          const p = JSON.parse(atob(tr.credential.split('.')[1]));
+          setUser({ id: p.sub, email: p.email, name: p.name });
+          fetchAll();
+        }catch(e){console.warn(e);}
+      }});
+    });
+  },[]);
 
   async function fetchAll() {
     setLoading(true);
     try {
-      const data = await apiFetch('/getAll');
+      const data = await apiFetch('getAll');
       setAccounts(data.accounts || []);
       setAirdrops(data.airdrops || []);
       setAssignments(data.assignments || []);
@@ -73,26 +86,61 @@ export default function App() {
     try {
       if (newAcc.secretPhrase && encPass) { newAcc.secretPhraseEncrypted = await encryptString(newAcc.secretPhrase, encPass); delete newAcc.secretPhrase; }
       if(!newAcc.id) newAcc.id = crypto.randomUUID();
-      await apiFetch('/createAccount', { account: newAcc }); await fetchAll();
+      await apiFetch('createAccount', { account: newAcc });
+      await fetchAll();
     } catch(e){ console.error(e); alert('Create account failed'); } finally { setLoading(false); }
   }
+
   async function updateAccount(id,patch) {
     setLoading(true);
     try {
       if (patch.secretPhrase && encPass) { patch.secretPhraseEncrypted = await encryptString(patch.secretPhrase, encPass); delete patch.secretPhrase; }
-      await apiFetch('/updateAccount', { id, patch }); await fetchAll();
-    } catch(e){ console.error(e); alert('Update failed'); } finally{ setLoading(false); }
+      await apiFetch('updateAccount', { id, patch });
+      await fetchAll();
+    } catch(e){ console.error(e); alert('Update failed'); } finally { setLoading(false); }
   }
-  async function deleteAccount(id) { if(!confirm('Delete?')) return; setLoading(true); try{ await apiFetch('/deleteAccount',{id}); await fetchAll(); }catch(e){console.error(e); alert('Delete failed')}finally{setLoading(false);} }
 
-  async function createAirdrop(drop) { setLoading(true); try{ if(!drop.id) drop.id = crypto.randomUUID(); await apiFetch('/createAirdrop',{airdrop:drop}); await fetchAll(); }catch(e){console.error(e); alert('Create airdrop failed')}finally{setLoading(false);} }
-  async function updateAirdrop(id,patch){ setLoading(true); try{ await apiFetch('/updateAirdrop',{id,patch}); await fetchAll(); }catch(e){console.error(e); alert('Update failed')}finally{setLoading(false);} }
-  async function assignAccountsToAirdrop(airdropId, accountIds){ setLoading(true); try{ await apiFetch('/assignAccounts',{airdropId, accountIds}); await fetchAll(); }catch(e){console.error(e); alert('Assign failed')}finally{setLoading(false);} }
-  async function updateAssignment(assignId,patch){ setLoading(true); try{ await apiFetch('/updateAssignment',{assignmentId:assignId, patch}); await fetchAll(); }catch(e){console.error(e); alert('Update assignment failed')}finally{setLoading(false);} }
+  async function deleteAccount(id) { 
+    if(!confirm('Delete?')) return;
+    setLoading(true); 
+    try{ await apiFetch('deleteAccount',{id}); await fetchAll(); } catch(e){ console.error(e); alert('Delete failed') } finally { setLoading(false); } 
+  }
 
-  async function revealSecret(a){ if(!encPass) return alert('Enter passphrase'); if(!a.secretPhraseEncrypted) return alert('No secret'); try{ const dec = await decryptString(a.secretPhraseEncrypted, encPass); alert('Secret: '+dec); }catch(e){ console.error(e); alert('Decrypt failed'); } }
+  async function createAirdrop(drop) { 
+    setLoading(true); 
+    try{ 
+      if(!drop.id) drop.id = crypto.randomUUID(); 
+      await apiFetch('createAirdrop',{airdrop:drop}); 
+      await fetchAll(); 
+    }catch(e){console.error(e); alert('Create airdrop failed')}finally{setLoading(false);} 
+  }
 
-  const totals = useMemo(()=>{ let earned=0, invested=0; assignments.forEach(a=>{ earned += Number(a.rewardAmount||0); invested += Number(a.investmentAmount||0); }); return {earned,invested}; },[assignments]);
+  async function updateAirdrop(id,patch){ 
+    setLoading(true); 
+    try{ await apiFetch('updateAirdrop',{id,patch}); await fetchAll(); }catch(e){console.error(e); alert('Update failed')}finally{setLoading(false);} 
+  }
+
+  async function assignAccountsToAirdrop(airdropId, accountIds){ 
+    setLoading(true); 
+    try{ await apiFetch('assignAccounts',{airdropId, accountIds}); await fetchAll(); }catch(e){console.error(e); alert('Assign failed')}finally{setLoading(false);} 
+  }
+
+  async function updateAssignment(assignId,patch){ 
+    setLoading(true); 
+    try{ await apiFetch('updateAssignment',{assignmentId:assignId, patch}); await fetchAll(); }catch(e){console.error(e); alert('Update assignment failed')}finally{setLoading(false);} 
+  }
+
+  async function revealSecret(a){
+    if(!encPass) return alert('Enter passphrase');
+    if(!a.secretPhraseEncrypted) return alert('No secret');
+    try{ const dec = await decryptString(a.secretPhraseEncrypted, encPass); alert('Secret: '+dec); }catch(e){console.error(e); alert('Decrypt failed'); }
+  }
+
+  const totals = useMemo(()=>{
+    let earned=0, invested=0;
+    assignments.forEach(a=>{ earned += Number(a.rewardAmount||0); invested += Number(a.investmentAmount||0); });
+    return {earned,invested};
+  },[assignments]);
 
   if(!user) return (<div className='min-h-screen p-6'><div className='max-w-3xl mx-auto bg-gray-900 p-6 rounded'><h1 className='text-2xl font-bold'>Kesug — Airdrop Manager</h1><p className='mt-4'>Sign in with Google to continue.</p><div className='mt-4'><button onClick={()=>window.google?.accounts?.id.prompt()} className='px-4 py-2 rounded bg-indigo-600'>Sign in</button></div></div></div>);
 
@@ -121,6 +169,9 @@ export default function App() {
     </div>
   );
 }
+
+// AccountsPanel and AirdropsPanel remain mostly the same, just ensure you update all apiFetch calls with 'action' parameter
+
 
 function AccountsPanel({accounts,onCreate,onUpdate,onDelete,onReveal,isEditor}){
   const [form,setForm]=useState({name:'',email:'',twitter:'',discord:'',telegram:'',secretPhrase:''});
