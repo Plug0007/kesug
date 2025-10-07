@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 
 // CONFIG - update before deploy
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwjgCJOJu8Xac2n38491e1VvurZ2yHP_F7Z8oh6oRXhRs6dTFAmsdpdsyAJzNYhmtNBiA/exec'; // e.g. https://script.google.com/macros/s/AKfyc.../exec
-const OAUTH_CLIENT_ID = ''; // Google OAuth client ID (optional for sign-in)
+const OAUTH_CLIENT_ID = '718386722941-29avbsbt8dc14ve059667pa9au0lr1i0.apps.googleusercontent.com'; // Google OAuth client ID (optional for sign-in)
 
 // --- Encryption utilities (AES-GCM via Web Crypto)
 async function deriveKey(passphrase, salt) {
